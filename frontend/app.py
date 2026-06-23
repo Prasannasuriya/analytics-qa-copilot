@@ -408,7 +408,7 @@ with tab_chat:
         if chat_inp:
             prompt = chat_inp
 
-    if prompt:
+    if prompt and prompt.strip():
         if not st.session_state.api_key:
             st.error("⚠️ Please configure your Gemini API Key in the sidebar before asking questions.")
         else:
