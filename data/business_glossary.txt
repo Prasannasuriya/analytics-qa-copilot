@@ -1,0 +1,6 @@
+Analytics Glossary & Jargon Mappings:
+1. VIP Customer: A customer who has spent more than ,500 in total orders across all purchases.
+2. Low Stock Warning: A product is considered low stock if its current stock level drops below 50 units. Action is required for items in this state.
+3. Active Regions: We currently track orders from multiple countries: USA, Canada, UK, Germany, France, Japan, Australia, India.
+4. Active Order Statuses: Orders can have statuses: 'Completed', 'Processing', 'Shipped', 'Cancelled'.
+5. Target Category Mapping: SQLite matches category strings exactly. Our product categories are: 'Electronics', 'Furniture', and 'Office Supplies'.
