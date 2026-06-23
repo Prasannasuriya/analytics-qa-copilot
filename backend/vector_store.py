@@ -20,7 +20,7 @@ class SchemaKnowledgeBase:
         if not api_key:
             raise ValueError("Google API Key is required to initialize embeddings.")
         return GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model="text-embedding-004",
             google_api_key=api_key
         )
 
