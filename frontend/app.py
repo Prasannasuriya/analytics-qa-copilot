@@ -239,8 +239,7 @@ with tab_schema:
     st.markdown(f"**Backend API Server Status:** `{backend_url_display}`")
     
     # Display statistics
-    tables = [line.split("Table: ")[1] for line in schema_text.split("
-") if line.startswith("Table: ")]
+    tables = [line.split("Table: ")[1] for line in schema_text.split("\n") if line.startswith("Table: ")]
     
     st.markdown(f"""
     <div class='metric-container'>
