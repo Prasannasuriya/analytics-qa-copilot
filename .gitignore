@@ -8,7 +8,7 @@ env/
 venv/
 .env
 
-# Databases
+# Databases (keep out of git - auto-generated at startup)
 data/*.db
 data/faiss_index/
 data/saved_questions.json

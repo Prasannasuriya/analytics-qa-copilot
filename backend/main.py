@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import json
 
-from backend.database import init_database, get_db_schema, execute_safe_query
-from backend.vector_store import SchemaKnowledgeBase
-from backend.copilot import generate_sql, explain_results, recommend_chart
+from .database import init_database, get_db_schema, execute_safe_query
+from .vector_store import SchemaKnowledgeBase
+from .copilot import generate_sql, explain_results, recommend_chart
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
