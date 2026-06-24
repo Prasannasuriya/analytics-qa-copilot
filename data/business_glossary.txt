@@ -1,6 +1,31 @@
-Analytics Glossary & Jargon Mappings:
-1. VIP Customer: A customer who has spent more than ,500 in total orders across all purchases.
-2. Low Stock Warning: A product is considered low stock if its current stock level drops below 50 units. Action is required for items in this state.
-3. Active Regions: We currently track orders from multiple countries: USA, Canada, UK, Germany, France, Japan, Australia, India.
-4. Active Order Statuses: Orders can have statuses: 'Completed', 'Processing', 'Shipped', 'Cancelled'.
-5. Target Category Mapping: SQLite matches category strings exactly. Our product categories are: 'Electronics', 'Furniture', and 'Office Supplies'.
+# Analytics Q&A Copilot — Business Glossary
+
+## Customer Segments
+- **VIP Customer**: Any customer whose total order value exceeds $10,000.
+- **Regular Customer**: Total order value between $1,000 and $10,000.
+- **New Customer**: Total order value below $1,000 or account age < 90 days.
+
+## Inventory Terms
+- **Low Stock**: Fewer than 50 units remaining in the inventory table.
+- **Out of Stock**: 0 units remaining — must be excluded from active sales reports.
+- **Overstock**: More than 500 units for a single SKU.
+
+## Order Status Codes
+- **pending** — Order placed but not yet processed.
+- **processing** — Payment confirmed, awaiting shipment.
+- **shipped** — Dispatched to carrier.
+- **delivered** — Confirmed delivery.
+- **cancelled** — Order voided; excluded from revenue totals.
+- **returned** — Goods sent back; excluded from revenue totals.
+
+## Revenue & Targets
+- **Gross Revenue**: Sum of `total_amount` across all delivered and shipped orders.
+- **Net Revenue**: Gross Revenue minus returned order values.
+- **Sales Target**: Monthly target stored in the `sales_targets` table, per category.
+- **Attainment %**: (Actual Sales / Sales Target) × 100.
+
+## Date Conventions
+- Fiscal year follows the calendar year (Jan–Dec).
+- All dates stored as TEXT in ISO-8601 format: `YYYY-MM-DD`.
+- Use `strftime('%Y-%m', order_date)` for monthly grouping in SQLite.
+- Use `strftime('%Y', order_date)` for annual grouping.
