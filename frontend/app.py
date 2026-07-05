@@ -154,6 +154,7 @@ with st.sidebar:
         if not st.session_state.api_key:
             st.warning("Please provide a Gemini API Key first.")
         else:
+            # Note: Knowledge base indexing works WITHOUT embedding model now
             with st.spinner("Indexing document…"):
                 done = False
                 if BACKEND_UP:
@@ -205,19 +206,30 @@ st.markdown("<div class='subtitle-text'>Natural-language analytics assistant pow
 tab_chat, tab_schema = st.tabs(["💬 Assistant Chat", "🗂️ Database Schema"])
 
 # ── Active DB path & schema ───────────────────────────────────────────────────
-active_db   = st.session_state.db_path or DEFAULT_DB
-schema_text = ""
+active_db = st.session_state.db_path or DEFAULT_DB
 
-if BACKEND_UP:
-    try:
-        params = {"db_path": active_db} if st.session_state.db_path else {}
-        schema_text = requests.get(f"{API_URL}/api/schema", params=params, timeout=3).json().get("schema", "")
-    except Exception:
-        pass
+# Cache schema in session state keyed by DB path so we don't re-init every rerun
+schema_cache_key = f"schema_{active_db}"
+if schema_cache_key not in st.session_state:
+    schema_text = ""
+    # 1. Try FastAPI backend
+    if BACKEND_UP:
+        try:
+            params = {"db_path": active_db} if st.session_state.db_path else {}
+            schema_text = requests.get(f"{API_URL}/api/schema", params=params, timeout=3).json().get("schema", "")
+        except Exception:
+            pass
+    # 2. Standalone: always init DB first then read schema
+    if not schema_text and HAS_BACKEND:
+        try:
+            init_database(active_db)
+            schema_text = get_db_schema(active_db)
+        except Exception as e:
+            schema_text = ""
+            st.error(f"Database init failed: {e}")
+    st.session_state[schema_cache_key] = schema_text
 
-if not schema_text and HAS_BACKEND:
-    init_database(active_db)
-    schema_text = get_db_schema(active_db)
+schema_text = st.session_state.get(schema_cache_key, "")
 
 # ── Schema tab ────────────────────────────────────────────────────────────────
 with tab_schema:
@@ -365,36 +377,49 @@ with tab_chat:
             # ── Standalone fallback ───────────────────────────────────────────
             if not result and HAS_BACKEND:
                 try:
-                    citations = []
-                    try:
-                        citations = vector_kb.search(prompt, api_key=st.session_state.api_key, k=2)
-                    except Exception:
-                        pass
+                    # Ensure schema is available - re-init if empty
+                    current_schema = schema_text
+                    if not current_schema.strip():
+                        try:
+                            init_database(active_db)
+                            current_schema = get_db_schema(active_db)
+                            st.session_state[schema_cache_key] = current_schema
+                        except Exception:
+                            pass
 
-                    sql = generate_sql(schema_text, prompt, citations, st.session_state.api_key)
-                    exec_res = execute_safe_query(active_db, sql)
-
-                    if not exec_res.get("success"):
-                        result = {
-                            "success": False,
-                            "query": sql,
-                            "error": exec_res.get("error", "Execution failed."),
-                            "citations": citations,
-                        }
+                    if not current_schema.strip():
+                        result = {"success": False, "error": "Could not load database schema. Please refresh the page.", "query": "", "data": [], "citations": []}
                     else:
-                        explanation = explain_results(prompt, sql, exec_res, st.session_state.api_key)
-                        chart       = recommend_chart(exec_res["columns"], exec_res["data"], st.session_state.api_key)
-                        result = {
-                            "success":     True,
-                            "query":       sql,
-                            "columns":     exec_res["columns"],
-                            "data":        exec_res["data"],
-                            "row_count":   exec_res["row_count"],
-                            "explanation": explanation,
-                            "chart":       chart,
-                            "citations":   citations,
-                        }
-                        save_question({"question": prompt, "category": "Custom", "description": ""})
+                        citations = []
+                        try:
+                            citations = vector_kb.search(prompt, api_key=st.session_state.api_key, k=2)
+                        except Exception:
+                            pass
+
+                        sql = generate_sql(current_schema, prompt, citations, st.session_state.api_key)
+                        exec_res = execute_safe_query(active_db, sql)
+
+                        if not exec_res.get("success"):
+                            result = {
+                                "success": False,
+                                "query": sql,
+                                "error": exec_res.get("error", "Execution failed."),
+                                "citations": citations,
+                            }
+                        else:
+                            explanation = explain_results(prompt, sql, exec_res, st.session_state.api_key)
+                            chart       = recommend_chart(exec_res["columns"], exec_res["data"], st.session_state.api_key)
+                            result = {
+                                "success":     True,
+                                "query":       sql,
+                                "columns":     exec_res["columns"],
+                                "data":        exec_res["data"],
+                                "row_count":   exec_res["row_count"],
+                                "explanation": explanation,
+                                "chart":       chart,
+                                "citations":   citations,
+                            }
+                            save_question({"question": prompt, "category": "Custom", "description": ""})
                 except Exception as e:
                     result = {"success": False, "error": str(e), "query": "", "data": [], "citations": []}
 
