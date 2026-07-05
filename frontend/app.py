@@ -207,29 +207,34 @@ st.markdown("<div class='subtitle-text'>Natural-language analytics assistant pow
 
 tab_chat, tab_schema = st.tabs(["💬 Assistant Chat", "🗂️ Database Schema"])
 
-# ── Active DB path & schema ───────────────────────────────────────────────────
-active_db = st.session_state.db_path or DEFAULT_DB
-
-# Cache schema in session state keyed by DB path so we don't re-init every rerun
+# ── Active DB path & schema (always reload if empty) ─────────────────────────
+active_db        = st.session_state.db_path or DEFAULT_DB
 schema_cache_key = f"schema_{active_db}"
-if schema_cache_key not in st.session_state:
+
+# Always force-init and reload if schema is missing or empty
+cached = st.session_state.get(schema_cache_key, "")
+if not cached.strip():
     schema_text = ""
     # 1. Try FastAPI backend
     if BACKEND_UP:
         try:
             params = {"db_path": active_db} if st.session_state.db_path else {}
-            schema_text = requests.get(f"{API_URL}/api/schema", params=params, timeout=3).json().get("schema", "")
+            schema_text = requests.get(
+                f"{API_URL}/api/schema", params=params, timeout=5
+            ).json().get("schema", "")
         except Exception:
             pass
-    # 2. Standalone: always init DB first then read schema
+    # 2. Standalone — always call init_database then get schema
     if not schema_text and HAS_BACKEND:
         try:
-            init_database(active_db)
+            init_database(active_db)           # creates DB if not exists
             schema_text = get_db_schema(active_db)
-        except Exception as e:
+        except Exception as exc:
+            st.error(f"❌ Database init failed: {exc}")
             schema_text = ""
-            st.error(f"Database init failed: {e}")
-    st.session_state[schema_cache_key] = schema_text
+    # Only cache if we got a real schema
+    if schema_text.strip():
+        st.session_state[schema_cache_key] = schema_text
 
 schema_text = st.session_state.get(schema_cache_key, "")
 

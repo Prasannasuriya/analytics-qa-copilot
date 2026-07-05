@@ -16,6 +16,10 @@ def _get_llm(api_key: str, temperature: float = 0.0) -> ChatGoogleGenerativeAI:
 
 def generate_sql(db_schema: str, user_query: str, context_docs: list, api_key: str) -> str:
     """Generate a safe SQLite SELECT query from a natural-language question."""
+    if not db_schema or not db_schema.strip():
+        raise ValueError("Database schema is empty. The database may still be initializing — please wait a moment and try again.")
+    if not user_query or not user_query.strip():
+        raise ValueError("Question is empty.")
     llm = _get_llm(api_key, temperature=0.0)
 
     context_str = ""
