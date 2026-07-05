@@ -19,14 +19,13 @@ try:
 except ImportError:
     HAS_OLD_SDK = False
 
-# Models to try in order
+# Models to try in order (working models first based on user API key capabilities)
 MODELS = [
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash",
+    "gemini-3.5-flash",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-2.0-flash-exp",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-pro",
 ]
 
 
