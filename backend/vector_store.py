@@ -1,123 +1,146 @@
 import os
+import json
+import numpy as np
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
+
+try:
+    import google.generativeai as genai
+    HAS_GENAI = True
+except ImportError:
+    HAS_GENAI = False
+
+try:
+    import faiss
+    HAS_FAISS = True
+except ImportError:
+    HAS_FAISS = False
+
 
 class SchemaKnowledgeBase:
     """
     Manages indexing and querying of metadata, glossary, and data dictionaries
-    using FAISS and Gemini Embeddings.
+    using FAISS and Gemini Embeddings via direct Google GenerativeAI SDK.
     """
+
     def __init__(self, index_dir: str):
         self.index_dir = index_dir
-        self.db = None
-        
-    def _get_embeddings(self, api_key: str) -> GoogleGenerativeAIEmbeddings:
-        """
-        Creates a Google GenAI Embeddings instance using the provided API key.
-        """
-        if not api_key:
-            raise ValueError("Google API Key is required to initialize embeddings.")
-        return GoogleGenerativeAIEmbeddings(
-            model="text-embedding-004",
-            google_api_key=api_key
-        )
+        self.index = None          # faiss.IndexFlatL2
+        self.chunks = []           # list of {"content": str, "source": str}
+        self._loaded = False
 
-    def load_index(self, api_key: str) -> bool:
-        """
-        Attempts to load the FAISS index from the local directory.
-        """
-        if self.db is not None:
-            return True
-            
-        if not os.path.exists(self.index_dir):
-            return False
-            
-        try:
-            embeddings = self._get_embeddings(api_key)
-            self.db = FAISS.load_local(
-                self.index_dir, 
-                embeddings, 
-                allow_dangerous_deserialization=True
+    # ── Embedding via direct SDK (avoids langchain version issues) ─────────
+    def _embed(self, texts: list, api_key: str) -> np.ndarray:
+        if not HAS_GENAI:
+            raise ImportError("google-generativeai package not installed.")
+        genai.configure(api_key=api_key)
+        vectors = []
+        for text in texts:
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=text,
+                task_type="retrieval_document",
             )
+            vectors.append(result["embedding"])
+        return np.array(vectors, dtype=np.float32)
+
+    def _embed_query(self, text: str, api_key: str) -> np.ndarray:
+        genai.configure(api_key=api_key)
+        result = genai.embed_content(
+            model="models/text-embedding-004",
+            content=text,
+            task_type="retrieval_query",
+        )
+        return np.array([result["embedding"]], dtype=np.float32)
+
+    # ── Persistence helpers ────────────────────────────────────────────────
+    def _index_path(self):
+        return os.path.join(self.index_dir, "index.faiss")
+
+    def _meta_path(self):
+        return os.path.join(self.index_dir, "chunks.json")
+
+    def _save(self):
+        os.makedirs(self.index_dir, exist_ok=True)
+        faiss.write_index(self.index, self._index_path())
+        with open(self._meta_path(), "w", encoding="utf-8") as f:
+            json.dump(self.chunks, f)
+
+    def load_index(self, api_key: str = None) -> bool:
+        if self._loaded and self.index is not None:
+            return True
+        if not HAS_FAISS:
+            return False
+        if not os.path.exists(self._index_path()):
+            return False
+        try:
+            self.index = faiss.read_index(self._index_path())
+            with open(self._meta_path(), "r", encoding="utf-8") as f:
+                self.chunks = json.load(f)
+            self._loaded = True
             return True
         except Exception as e:
-            print(f"Error loading index: {e}")
+            print(f"Error loading FAISS index: {e}")
             return False
 
+    # ── Public API ─────────────────────────────────────────────────────────
     def add_document(self, text_content: str, source_name: str, api_key: str) -> bool:
-        """
-        Chunks and adds text content to the FAISS vector database.
-        Saves the database locally.
-        """
         if not text_content.strip():
             return False
-            
-        try:
-            embeddings = self._get_embeddings(api_key)
-            
-            # Split text into chunks
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=50
-            )
-            chunks = text_splitter.split_text(text_content)
-            
-            # Create documents with metadata
-            docs = [
-                Document(page_content=chunk, metadata={"source": source_name})
-                for chunk in chunks
-            ]
-            
-            # Check if index exists or create new
-            if self.load_index(api_key):
-                self.db.add_documents(docs)
-            else:
-                self.db = FAISS.from_documents(docs, embeddings)
-                
-            # Save index locally
-            os.makedirs(self.index_dir, exist_ok=True)
-            self.db.save_local(self.index_dir)
-            return True
-        except Exception as e:
-            print(f"Error adding document to vector store: {e}")
-            raise e
+        if not HAS_FAISS:
+            raise ImportError("faiss-cpu package not installed.")
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        texts = splitter.split_text(text_content)
+        if not texts:
+            return False
+
+        vectors = self._embed(texts, api_key)          # shape (N, 768)
+        dim = vectors.shape[1]
+
+        # Load or create index
+        self.load_index(api_key)
+        if self.index is None:
+            self.index = faiss.IndexFlatL2(dim)
+            self.chunks = []
+
+        self.index.add(vectors)
+        for t in texts:
+            self.chunks.append({"content": t, "source": source_name})
+
+        self._save()
+        return True
 
     def search(self, query: str, api_key: str, k: int = 3) -> list:
-        """
-        Searches the FAISS vector database for relevant chunks matching the query.
-        Returns a list of dicts with content and source metadata.
-        """
         if not self.load_index(api_key):
             return []
-            
+        if self.index.ntotal == 0:
+            return []
         try:
-            results = self.db.similarity_search(query, k=k)
-            return [
-                {
-                    "content": doc.page_content,
-                    "source": doc.metadata.get("source", "Unknown")
-                }
-                for doc in results
-            ]
+            q_vec = self._embed_query(query, api_key)
+            k = min(k, self.index.ntotal)
+            _, indices = self.index.search(q_vec, k)
+            results = []
+            for idx in indices[0]:
+                if 0 <= idx < len(self.chunks):
+                    results.append(self.chunks[idx])
+            return results
         except Exception as e:
             print(f"Error searching vector store: {e}")
             return []
 
     def reset(self) -> bool:
-        """
-        Deletes the local FAISS index files and resets the DB in memory.
-        """
-        self.db = None
+        self.index = None
+        self.chunks = []
+        self._loaded = False
         if os.path.exists(self.index_dir):
-            for file in os.listdir(self.index_dir):
+            for fname in os.listdir(self.index_dir):
                 try:
-                    os.remove(os.path.join(self.index_dir, file))
-                except Exception as e:
-                    print(f"Error deleting file {file}: {e}")
+                    os.remove(os.path.join(self.index_dir, fname))
+                except Exception:
+                    pass
             try:
                 os.rmdir(self.index_dir)
-            except Exception as e:
-                print(f"Error removing directory {self.index_dir}: {e}")
+            except Exception:
+                pass
         return True
