@@ -1,31 +1,57 @@
 # Analytics Q&A Copilot — Business Glossary
 
-## Customer Segments
-- **VIP Customer**: Any customer whose total order value exceeds $10,000.
-- **Regular Customer**: Total order value between $1,000 and $10,000.
-- **New Customer**: Total order value below $1,000 or account age < 90 days.
+## Database Tables & Column Names (Actual Schema)
 
-## Inventory Terms
-- **Low Stock**: Fewer than 50 units remaining in the inventory table.
-- **Out of Stock**: 0 units remaining — must be excluded from active sales reports.
-- **Overstock**: More than 500 units for a single SKU.
+### customers
+- customer_id, name, email, country, signup_date
+- Example: customer_id=1, name="Alice Smith", country="India"
 
-## Order Status Codes
-- **pending** — Order placed but not yet processed.
-- **processing** — Payment confirmed, awaiting shipment.
-- **shipped** — Dispatched to carrier.
-- **delivered** — Confirmed delivery.
-- **cancelled** — Order voided; excluded from revenue totals.
-- **returned** — Goods sent back; excluded from revenue totals.
+### products
+- product_id, name, category, price, stock
+- category is a text column: "Electronics", "Clothing", "Home", "Sports", "Books"
+- stock = units remaining in inventory
 
-## Revenue & Targets
-- **Gross Revenue**: Sum of `total_amount` across all delivered and shipped orders.
-- **Net Revenue**: Gross Revenue minus returned order values.
-- **Sales Target**: Monthly target stored in the `sales_targets` table, per category.
-- **Attainment %**: (Actual Sales / Sales Target) × 100.
+### orders
+- order_id, customer_id, order_date, total_amount, status
+- status values: "delivered", "shipped", "pending", "cancelled", "returned"
+- order_date format: YYYY-MM-DD (use strftime in SQLite)
 
-## Date Conventions
-- Fiscal year follows the calendar year (Jan–Dec).
-- All dates stored as TEXT in ISO-8601 format: `YYYY-MM-DD`.
-- Use `strftime('%Y-%m', order_date)` for monthly grouping in SQLite.
-- Use `strftime('%Y', order_date)` for annual grouping.
+### order_items
+- item_id, order_id, product_id, quantity, price
+- Links orders to products (line items)
+
+### sales_targets
+- target_id, year, month, target_amount, category
+- year = 4-digit year (2024, 2025)
+- month = integer 1-12
+- category matches products.category
+
+## Key Business Definitions
+
+### Customer Segments
+- VIP Customer: total order amount across all delivered orders > 5000
+- Regular Customer: total order amount between 1000 and 5000
+- New Customer: total order amount below 1000
+
+### Inventory Rules
+- Low Stock: stock < 50 units in products table
+- Out of Stock: stock = 0
+
+### Order Status
+- delivered: completed, counts toward revenue
+- shipped: in transit, counts toward revenue
+- pending: not yet processed
+- cancelled: voided, exclude from revenue
+- returned: goods sent back, exclude from revenue
+
+### Revenue Calculations
+- Gross Revenue: SUM(total_amount) WHERE status IN ('delivered','shipped')
+- Net Revenue: Gross Revenue excluding returned orders
+- Sales Attainment: (Actual Sales / target_amount) * 100
+
+## Date Conventions (SQLite)
+- All dates stored as TEXT in YYYY-MM-DD format
+- Monthly filter: strftime('%Y-%m', order_date) = '2025-03'
+- Year filter: strftime('%Y', order_date) = '2025'
+- Month number filter: strftime('%m', order_date) = '03'
+- For sales_targets use: WHERE year=2025 AND month=3
