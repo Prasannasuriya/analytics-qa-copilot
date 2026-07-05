@@ -148,37 +148,39 @@ with st.sidebar:
 
     # ── Knowledge-base document upload ───────────────────────────────────────
     st.markdown("### 📚 Knowledge Base")
-    st.caption("Upload a `.txt` or `.md` glossary / data-dictionary to improve query accuracy and enable citations.")
+    st.caption("Upload a `.txt` or `.md` glossary / data-dictionary to improve query accuracy.")
     doc_file = st.file_uploader("Upload guide / glossary", type=["txt", "md"])
     if doc_file:
-        if not st.session_state.api_key:
-            st.warning("Please provide a Gemini API Key first.")
-        else:
-            # Note: Knowledge base indexing works WITHOUT embedding model now
-            with st.spinner("Indexing document…"):
-                done = False
-                if BACKEND_UP:
-                    try:
-                        r = requests.post(
-                            f"{API_URL}/api/upload-doc",
-                            files={"file": (doc_file.name, doc_file.getvalue(), "text/plain")},
-                            data={"api_key": st.session_state.api_key},
-                        )
-                        if r.status_code == 200:
-                            st.success(r.json()["message"])
-                            done = True
-                    except Exception:
-                        pass
-                if not done and HAS_BACKEND:
-                    try:
-                        vector_kb.add_document(
-                            text_content=doc_file.getvalue().decode("utf-8", errors="ignore"),
-                            source_name=doc_file.name,
-                            api_key=st.session_state.api_key,
-                        )
-                        st.success(f"Indexed '{doc_file.name}' ✅")
-                    except Exception as e:
-                        st.error(f"Indexing failed: {e}")
+        with st.spinner("Indexing document…"):
+            done = False
+            if BACKEND_UP:
+                try:
+                    r = requests.post(
+                        f"{API_URL}/api/upload-doc",
+                        files={"file": (doc_file.name, doc_file.getvalue(), "text/plain")},
+                        data={"api_key": st.session_state.api_key or "none"},
+                    )
+                    if r.status_code == 200:
+                        st.success(r.json().get("message", "Indexed ✅"))
+                        done = True
+                except Exception:
+                    pass
+            if not done and HAS_BACKEND:
+                try:
+                    vector_kb.add_document(
+                        text_content=doc_file.getvalue().decode("utf-8", errors="ignore"),
+                        source_name=doc_file.name,
+                        api_key=st.session_state.api_key or "none",
+                    )
+                    st.success(f"✅ '{doc_file.name}' indexed successfully!")
+                    done = True
+                except Exception:
+                    pass
+            if not done:
+                # Store as plain text in session state as final fallback
+                kb_key = f"kb_{doc_file.name}"
+                st.session_state[kb_key] = doc_file.getvalue().decode("utf-8", errors="ignore")
+                st.success(f"✅ '{doc_file.name}' saved as context!")
 
     if st.button("🗑 Clear knowledge base"):
         done = False
