@@ -247,6 +247,3 @@ pytest tests/test_backend.py -v
 ```
 
 ---
-
-## 📄 License
-This project is submitted as an individual academic project under PSVPEC.
