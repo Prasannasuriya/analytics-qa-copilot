@@ -86,8 +86,30 @@ html, body, [class*="css"] {
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 section[data-testid="stSidebar"] {
-    background: #0e1117;
-    border-right: 1px solid rgba(255,255,255,0.07);
+    background: #11151d !important;
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] h4,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] .stText {
+    color: #ffffff !important;
+}
+section[data-testid="stSidebar"] .stCaption {
+    color: rgba(255,255,255,0.65) !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stFileUploader"] {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+section[data-testid="stSidebar"] .stAlert p {
+    color: inherit !important;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
